@@ -11,11 +11,3 @@ CREATE TABLE IF NOT EXISTS usuarios (
   criado_em         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT chk_tipo CHECK (tipo IN ('admin', 'usuario'))
 );
-
--- Tabela de sessões requerida pelo connect-pg-simple
-CREATE TABLE IF NOT EXISTS sessions (
-  sid    VARCHAR NOT NULL PRIMARY KEY,
-  sess   JSON NOT NULL,
-  expire TIMESTAMPTZ NOT NULL
-);
-CREATE INDEX IF NOT EXISTS sessions_expire_idx ON sessions (expire);

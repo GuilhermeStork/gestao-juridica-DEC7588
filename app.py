@@ -240,7 +240,7 @@ def page_config():
                     DROP TABLE IF EXISTS
                         notificacoes, mensagens, conversa_participantes, conversas,
                         atendimentos, tarefas, documentos, parcelas, financeiros,
-                        processos, clientes, sessions, usuarios
+                        processos, clientes, usuarios
                     CASCADE
                 """)
                 st.success("Todas as tabelas foram removidas.")
@@ -1030,7 +1030,7 @@ def page_conversas():
 
 def page_conversa_participantes():
     st.header("Conversa Participantes")
-    tabs = st.tabs(["Listar", "Inserir", "Excluir"])
+    tabs = st.tabs(["Listar", "Inserir", "Atualizar", "Excluir"])
     conversas = fetch("SELECT id, COALESCE(nome, CONCAT('Conversa #',id)) AS label FROM conversas ORDER BY id")
     usuarios  = fetch("SELECT id, nome FROM usuarios ORDER BY nome")
 
@@ -1063,6 +1063,42 @@ def page_conversa_participantes():
                     st.error(str(e))
 
     with tabs[2]:
+        rows = fetch("""
+            SELECT cp.conversa_id, cp.usuario_id, cp.ultima_leitura,
+                   CONCAT(cv.nome,' – ',u.nome) AS label
+            FROM conversa_participantes cp
+            JOIN conversas cv ON cv.id=cp.conversa_id
+            JOIN usuarios  u  ON u.id=cp.usuario_id
+            ORDER BY cp.conversa_id
+        """)
+        if rows:
+            labels = {r["label"]: r for r in rows}
+            sel = st.selectbox("Selecionar participante", list(labels.keys()), key="sel_upd_part")
+            if sel:
+                rec = labels[sel]
+                _ul = rec["ultima_leitura"]
+                with st.form("upd_part"):
+                    col_d, col_t = st.columns(2)
+                    with col_d:
+                        leitura_data = st.date_input("Última leitura (data)", value=_ul.date() if _ul else date.today())
+                    with col_t:
+                        leitura_hora = st.time_input("Última leitura (hora)", value=_ul.time().replace(second=0, microsecond=0) if _ul else datetime.now().time().replace(second=0, microsecond=0))
+                    if st.form_submit_button("Atualizar"):
+                        try:
+                            ultima_leitura = datetime.combine(leitura_data, leitura_hora, tzinfo=timezone.utc)
+                            execute("""
+                                UPDATE conversa_participantes SET ultima_leitura=%s
+                                WHERE conversa_id=%s AND usuario_id=%s
+                            """, [ultima_leitura, rec["conversa_id"], rec["usuario_id"]])
+                            st.success("Participante atualizado.")
+                            time.sleep(1.5)
+                            st.rerun()
+                        except Exception as e:
+                            st.error(str(e))
+        else:
+            st.info("Nenhum participante cadastrado.")
+
+    with tabs[3]:
         rows = fetch("""
             SELECT cp.conversa_id, cp.usuario_id,
                    CONCAT(cv.nome,' – ',u.nome) AS label
@@ -1335,7 +1371,6 @@ Tabelas do banco de dados controladoria (PostgreSQL):
 
 usuarios(id, nome, email, senha_hash, tipo, ativo, acesso_financeiro, pode_excluir, foto_perfil_url, criado_em)
   tipo: 'admin','usuario'
-sessions(sid, sess, expire)
 clientes(id, nome, cpf, rg, email, telefone, endereco, criado_em)
 processos(id, cliente_id, nome, numero_processo, vara, comarca, area, status, criado_em)
   area: 'Cível','Trabalhista','Família','Criminal','Tributário','Imobiliário','Sucessões','Bancário','Ambiental','Outro'

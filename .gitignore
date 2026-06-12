@@ -1,13 +1,9 @@
-# Python
 .venv/
 __pycache__/
 *.pyc
 
-# Ambiente
 .env
 
-# Documentos do trabalho
 docs/
 
-# macOS
 .DS_Store
