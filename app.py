@@ -1286,9 +1286,10 @@ def page_relatorios():
     try:
         rows = fetch("""
             SELECT p.area,
-                   COUNT(DISTINCT p.id)         AS total_processos,
-                   COUNT(DISTINCT p.cliente_id) AS total_clientes,
-                   SUM(f.valor_total)            AS receita_total
+                   COUNT(DISTINCT p.id)              AS total_processos,
+                   COUNT(DISTINCT c.id)              AS total_clientes,
+                   STRING_AGG(DISTINCT c.nome, ', ') AS clientes,
+                   SUM(f.valor_total)                AS receita_total
             FROM financeiros f
             JOIN processos p ON p.id = f.processo_id
             JOIN clientes  c ON c.id = p.cliente_id
@@ -1309,8 +1310,9 @@ def page_relatorios():
     try:
         rows = fetch("""
             SELECT u.nome AS usuario, t.status,
-                   COUNT(t.id)                   AS total_tarefas,
-                   COUNT(DISTINCT t.processo_id) AS processos_envolvidos
+                   COUNT(t.id)                       AS total_tarefas,
+                   COUNT(DISTINCT p.id)              AS processos_envolvidos,
+                   STRING_AGG(DISTINCT p.area, ', ') AS areas
             FROM tarefas t
             JOIN usuarios u ON u.id = t.atribuido_para
             LEFT JOIN processos p ON p.id = t.processo_id
@@ -1332,10 +1334,11 @@ def page_relatorios():
     try:
         rows = fetch("""
             SELECT a.tipo,
-                   COUNT(*)                      AS total_atendimentos,
-                   COUNT(DISTINCT a.cliente_id)  AS clientes_atendidos,
-                   COUNT(DISTINCT a.usuario_id)  AS advogados_envolvidos,
-                   ROUND(AVG(a.duracao_min), 1)  AS duracao_media_min
+                   COUNT(*)                          AS total_atendimentos,
+                   COUNT(DISTINCT c.id)              AS clientes_atendidos,
+                   COUNT(DISTINCT u.id)              AS advogados_envolvidos,
+                   STRING_AGG(DISTINCT u.nome, ', ') AS advogados,
+                   ROUND(AVG(a.duracao_min), 1)      AS duracao_media_min
             FROM atendimentos a
             JOIN clientes c ON c.id = a.cliente_id
             JOIN usuarios u ON u.id = a.usuario_id
