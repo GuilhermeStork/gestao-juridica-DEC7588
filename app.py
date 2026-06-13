@@ -189,6 +189,52 @@ def run_seed():
                     VALUES (%s,%s,%s,%s,%s)
                 """, [uid, tipo, titulo, corpo, lida])
 
+            # documentos (5)
+            documentos = [
+                (pids[0], 'Procuração - Roberto Alves',     'gerado', 'https://docs.exemplo/proc-roberto.pdf',  'application/pdf', admin_id),
+                (pids[0], 'Contrato de honorários',          'gerado', 'https://docs.exemplo/contrato-hon.pdf',  'application/pdf', ana_id),
+                (pids[2], 'Certidão de casamento',           'upload', 'https://docs.exemplo/cert-casamento.pdf','application/pdf', carlos_id),
+                (pids[4], 'Petição inicial - danos morais',  'gerado', 'https://docs.exemplo/peticao-danos.pdf', 'application/pdf', ana_id),
+                (pids[6], 'Certidão de óbito',               'upload', 'https://docs.exemplo/cert-obito.pdf',    'application/pdf', carlos_id),
+            ]
+            for proc_id, nome, tipo, url, mime, criador in documentos:
+                cur.execute("""
+                    INSERT INTO documentos (processo_id, nome, tipo, url, mime_type, criado_por)
+                    VALUES (%s,%s,%s,%s,%s,%s)
+                """, [proc_id, nome, tipo, url, mime, criador])
+
+            # conversas (3) + participantes + mensagens
+            conversas = [
+                ('Caso Trabalhista - Roberto',   pids[0], c1,   admin_id,  [admin_id, ana_id]),
+                ('Divórcio Consensual - Pedro',  pids[2], c3,   carlos_id, [carlos_id, ana_id]),
+                ('Equipe Interna',               None,    None, admin_id,  [admin_id, ana_id, carlos_id]),
+            ]
+            mensagens_por_conversa = [
+                [(admin_id, 'Pessoal, abri esta conversa para acompanharmos o caso do Roberto.'),
+                 (ana_id,   'Perfeito. Já analisei os documentos, vou elaborar a petição inicial.')],
+                [(carlos_id,'O cliente trouxe a certidão de casamento hoje.'),
+                 (ana_id,   'Ótimo, podemos protocolar o divórcio na próxima semana.')],
+                [(admin_id, 'Bom dia, equipe! Reunião de alinhamento às 14h.'),
+                 (carlos_id,'Combinado, estarei lá.'),
+                 (ana_id,   'Presente.')],
+            ]
+            for (nome, proc_id, cli_id, criador, participantes), msgs in zip(conversas, mensagens_por_conversa):
+                cur.execute("""
+                    INSERT INTO conversas (nome, processo_id, cliente_id, criado_por)
+                    VALUES (%s,%s,%s,%s) RETURNING id
+                """, [nome, proc_id, cli_id, criador])
+                conv_id = cur.fetchone()["id"]
+                for uid in participantes:
+                    cur.execute("""
+                        INSERT INTO conversa_participantes (conversa_id, usuario_id)
+                        VALUES (%s,%s) ON CONFLICT DO NOTHING
+                    """, [conv_id, uid])
+                for autor, conteudo in msgs:
+                    cur.execute("""
+                        INSERT INTO mensagens (conversa_id, usuario_id, conteudo)
+                        VALUES (%s,%s,%s)
+                    """, [conv_id, autor, conteudo])
+
         conn.commit()
 
 # ── helpers de UI ─────────────────────────────────────────────────────────────
@@ -254,7 +300,7 @@ def page_usuarios():
     tabs = st.tabs(["Listar", "Inserir", "Atualizar", "Excluir"])
 
     with tabs[0]:
-        show_df(fetch("SELECT id, nome, email, tipo, ativo, acesso_financeiro, pode_excluir, criado_em FROM usuarios ORDER BY id"))
+        show_df(fetch("SELECT id, nome, email, tipo, ativo, acesso_financeiro, pode_excluir, foto_perfil_url, criado_em FROM usuarios ORDER BY id"))
 
     with tabs[1]:
         with st.form("ins_usuario"):
@@ -264,12 +310,13 @@ def page_usuarios():
             ativo = st.checkbox("Ativo", value=True)
             af    = st.checkbox("Acesso financeiro")
             pe    = st.checkbox("Pode excluir")
+            foto  = st.text_input("Foto de perfil (URL)")
             if st.form_submit_button("Inserir"):
                 try:
                     execute("""
-                        INSERT INTO usuarios (nome, email, senha_hash, tipo, ativo, acesso_financeiro, pode_excluir)
-                        VALUES (%s,%s,'hash_placeholder',%s,%s,%s,%s)
-                    """, [nome, email, tipo, ativo, af, pe])
+                        INSERT INTO usuarios (nome, email, senha_hash, tipo, ativo, acesso_financeiro, pode_excluir, foto_perfil_url)
+                        VALUES (%s,%s,'hash_placeholder',%s,%s,%s,%s,%s)
+                    """, [nome, email, tipo, ativo, af, pe, foto or None])
                     st.success("Usuário inserido.")
                     time.sleep(1.5)
                     st.rerun()
@@ -290,12 +337,13 @@ def page_usuarios():
                 ativo = st.checkbox("Ativo", value=rec["ativo"])
                 af    = st.checkbox("Acesso financeiro", value=rec["acesso_financeiro"])
                 pe    = st.checkbox("Pode excluir", value=rec["pode_excluir"])
+                foto  = st.text_input("Foto de perfil (URL)", value=rec["foto_perfil_url"] or "")
                 if st.form_submit_button("Atualizar"):
                     try:
                         execute("""
                             UPDATE usuarios SET nome=%s, email=%s, tipo=%s, ativo=%s,
-                            acesso_financeiro=%s, pode_excluir=%s WHERE id=%s
-                        """, [nome, email, tipo, ativo, af, pe, uid])
+                            acesso_financeiro=%s, pode_excluir=%s, foto_perfil_url=%s WHERE id=%s
+                        """, [nome, email, tipo, ativo, af, pe, foto or None, uid])
                         st.success("Usuário atualizado.")
                         time.sleep(1.5)
                         st.rerun()
@@ -328,15 +376,16 @@ def page_clientes():
         with st.form("ins_cliente"):
             nome     = st.text_input("Nome completo")
             cpf      = st.text_input("CPF")
+            rg       = st.text_input("RG")
             email    = st.text_input("E-mail")
             telefone = st.text_input("Telefone")
             endereco = st.text_area("Endereço")
             if st.form_submit_button("Inserir"):
                 try:
                     execute("""
-                        INSERT INTO clientes (nome, cpf, email, telefone, endereco)
-                        VALUES (%s,%s,%s,%s,%s)
-                    """, [nome, cpf, email, telefone, endereco])
+                        INSERT INTO clientes (nome, cpf, rg, email, telefone, endereco)
+                        VALUES (%s,%s,%s,%s,%s,%s)
+                    """, [nome, cpf, rg or None, email, telefone, endereco])
                     st.success("Cliente inserido.")
                     time.sleep(1.5)
                     st.rerun()
@@ -353,15 +402,16 @@ def page_clientes():
             with st.form("upd_cliente"):
                 nome     = st.text_input("Nome",     value=rec["nome"])
                 cpf      = st.text_input("CPF",      value=rec["cpf"] or "")
+                rg       = st.text_input("RG",       value=rec["rg"] or "")
                 email    = st.text_input("E-mail",   value=rec["email"] or "")
                 telefone = st.text_input("Telefone", value=rec["telefone"] or "")
                 endereco = st.text_area("Endereço",  value=rec["endereco"] or "")
                 if st.form_submit_button("Atualizar"):
                     try:
                         execute("""
-                            UPDATE clientes SET nome=%s, cpf=%s, email=%s, telefone=%s, endereco=%s
+                            UPDATE clientes SET nome=%s, cpf=%s, rg=%s, email=%s, telefone=%s, endereco=%s
                             WHERE id=%s
-                        """, [nome, cpf, email, telefone, endereco, cid])
+                        """, [nome, cpf, rg or None, email, telefone, endereco, cid])
                         st.success("Cliente atualizado.")
                         time.sleep(1.5)
                         st.rerun()
@@ -719,6 +769,7 @@ def page_documentos():
 
 PRIORIDADES  = ['baixa','normal','alta','urgente']
 STATUS_TAREF = ['pendente','em_andamento','concluida','cancelada']
+RECORRENCIAS = ['diaria','semanal','mensal']
 
 def page_tarefas():
     st.header("Tarefas")
@@ -729,7 +780,7 @@ def page_tarefas():
     with tabs[0]:
         show_df(fetch("""
             SELECT t.id, t.titulo, p.nome AS processo, u1.nome AS atribuido, u2.nome AS criado_por,
-                   t.data_vencimento, t.prioridade, t.status, t.criado_em
+                   t.data_vencimento, t.prioridade, t.status, t.recorrencia, t.criado_em
             FROM tarefas t
             LEFT JOIN processos p  ON p.id=t.processo_id
             LEFT JOIN usuarios u1  ON u1.id=t.atribuido_para
@@ -749,15 +800,17 @@ def page_tarefas():
             vencimento = st.date_input("Vencimento")
             prioridade = st.selectbox("Prioridade", PRIORIDADES, index=1)
             status     = st.selectbox("Status", STATUS_TAREF)
+            recorrencia= st.selectbox("Recorrência", ["—"] + RECORRENCIAS)
             if st.form_submit_button("Inserir"):
                 try:
                     proc_id = opts_p[proc_sel] if proc_sel != "—" else None
+                    rec_val = recorrencia if recorrencia != "—" else None
                     execute("""
-                        INSERT INTO tarefas (titulo, descricao, processo_id, atribuido_para, criado_por, data_vencimento, prioridade, status)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                        INSERT INTO tarefas (titulo, descricao, processo_id, atribuido_para, criado_por, data_vencimento, prioridade, status, recorrencia)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     """, [titulo, descricao or None, proc_id, opts_u[atrib_sel], opts_u[criador_sel],
                           datetime(vencimento.year, vencimento.month, vencimento.day, tzinfo=timezone.utc),
-                          prioridade, status])
+                          prioridade, status, rec_val])
                     st.success("Tarefa inserida.")
                     time.sleep(1.5)
                     st.rerun()
@@ -787,9 +840,12 @@ def page_tarefas():
                 vencimento = st.date_input("Vencimento", value=rec["data_vencimento"].date() if rec["data_vencimento"] else date.today())
                 prioridade = st.selectbox("Prioridade", PRIORIDADES, index=PRIORIDADES.index(rec["prioridade"]) if rec["prioridade"] in PRIORIDADES else 1)
                 status     = st.selectbox("Status", STATUS_TAREF, index=STATUS_TAREF.index(rec["status"]) if rec["status"] in STATUS_TAREF else 0)
+                recorrencia= st.selectbox("Recorrência", ["—"] + RECORRENCIAS,
+                              index=(["—"] + RECORRENCIAS).index(rec["recorrencia"]) if rec["recorrencia"] in RECORRENCIAS else 0)
                 if st.form_submit_button("Atualizar"):
                     try:
                         proc_id = opts_p[proc_sel] if proc_sel != "—" else None
+                        rec_val = recorrencia if recorrencia != "—" else None
                         if status == "concluida" and rec["status"] != "concluida":
                             concluida_em = datetime.now(timezone.utc)
                         elif status != "concluida":
@@ -798,10 +854,10 @@ def page_tarefas():
                             concluida_em = rec["concluida_em"]
                         execute("""
                             UPDATE tarefas SET titulo=%s, descricao=%s, processo_id=%s, atribuido_para=%s,
-                            criado_por=%s, data_vencimento=%s, prioridade=%s, status=%s, concluida_em=%s WHERE id=%s
+                            criado_por=%s, data_vencimento=%s, prioridade=%s, status=%s, recorrencia=%s, concluida_em=%s WHERE id=%s
                         """, [titulo, descricao or None, proc_id, opts_u[atrib_sel], opts_u[criador_sel],
                               datetime(vencimento.year, vencimento.month, vencimento.day, tzinfo=timezone.utc),
-                              prioridade, status, concluida_em, tid])
+                              prioridade, status, rec_val, concluida_em, tid])
                         st.success("Tarefa atualizada.")
                         time.sleep(1.5)
                         st.rerun()
