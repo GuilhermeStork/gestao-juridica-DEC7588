@@ -1338,9 +1338,8 @@ def page_notificacoes():
 def page_relatorios():
     st.header("Relatórios Analíticos")
 
-    st.subheader("1 — Receita por área jurídica")
-    try:
-        rows = fetch("""
+    st.subheader("1 - Receita por área jurídica")
+    sql1 = """
             SELECT p.area,
                    COUNT(DISTINCT p.id)              AS total_processos,
                    COUNT(DISTINCT c.id)              AS total_clientes,
@@ -1351,7 +1350,11 @@ def page_relatorios():
             JOIN clientes  c ON c.id = p.cliente_id
             GROUP BY p.area
             ORDER BY receita_total DESC
-        """)
+    """
+    try:
+        rows = fetch(sql1)
+        with st.expander("Ver SQL da consulta"):
+            st.code(sql1, language="sql")
         df1 = pd.DataFrame(rows)
         st.dataframe(df1, use_container_width=True)
         if not df1.empty:
@@ -1362,9 +1365,8 @@ def page_relatorios():
     except Exception as e:
         st.error(str(e))
 
-    st.subheader("2 — Tarefas por usuário e status")
-    try:
-        rows = fetch("""
+    st.subheader("2 - Tarefas por usuário e status")
+    sql2 = """
             SELECT u.nome AS usuario, t.status,
                    COUNT(t.id)                       AS total_tarefas,
                    COUNT(DISTINCT p.id)              AS processos_envolvidos,
@@ -1374,7 +1376,11 @@ def page_relatorios():
             LEFT JOIN processos p ON p.id = t.processo_id
             GROUP BY u.nome, t.status
             ORDER BY u.nome, t.status
-        """)
+    """
+    try:
+        rows = fetch(sql2)
+        with st.expander("Ver SQL da consulta"):
+            st.code(sql2, language="sql")
         df2 = pd.DataFrame(rows)
         st.dataframe(df2, use_container_width=True)
         if not df2.empty:
@@ -1386,9 +1392,8 @@ def page_relatorios():
     except Exception as e:
         st.error(str(e))
 
-    st.subheader("3 — Atendimentos por tipo")
-    try:
-        rows = fetch("""
+    st.subheader("3 - Atendimentos por tipo")
+    sql3 = """
             SELECT a.tipo,
                    COUNT(*)                          AS total_atendimentos,
                    COUNT(DISTINCT c.id)              AS clientes_atendidos,
@@ -1400,7 +1405,11 @@ def page_relatorios():
             JOIN usuarios u ON u.id = a.usuario_id
             GROUP BY a.tipo
             ORDER BY total_atendimentos DESC
-        """)
+    """
+    try:
+        rows = fetch(sql3)
+        with st.expander("Ver SQL da consulta"):
+            st.code(sql3, language="sql")
         df3 = pd.DataFrame(rows)
         st.dataframe(df3, use_container_width=True)
         if not df3.empty:
