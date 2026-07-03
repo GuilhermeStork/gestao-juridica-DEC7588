@@ -12,8 +12,8 @@ Aplicação web para gestão de escritório de advocacia, desenvolvida com Strea
 **1. Clone o repositório**
 
 ```bash
-git clone <url-do-repositorio>
-cd gestao-juridica-bd
+git clone https://github.com/GuilhermeStork/gestao-juridica-DEC7588
+cd gestao-juridica-DEC7588
 ```
 
 **2. Crie o arquivo de variáveis de ambiente**
